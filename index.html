@@ -303,6 +303,7 @@ body.pub tr.scenband{display:none}
         <div class="menusep"></div>
         <button id="exportBtn" title="현재 데이터를 JSON 파일로 저장(수동 백업)">백업 (JSON 저장)</button>
         <button id="importBtn" title="JSON 백업 파일에서 복원">불러오기 (JSON)</button>
+        <button id="shareHtmlBtn" title="지금 편성표를 '보기 전용' 웹페이지(HTML) 한 장으로 저장 — 받는 사람은 라인업을 보고 엑셀로만 저장할 수 있어요(추가·수정·삭제 불가). 이 파일 하나만 넘기면 됩니다.">공유용 저장 (HTML)</button>
         <div class="menusep"></div>
         <button id="xlsBtn" title="현재 화면을 엑셀(.xlsx) 파일로 저장 — 보이는 그대로(선택 월·안·필터 반영), 공유용">엑셀 저장</button>
         <div class="menusep"></div>
@@ -453,10 +454,15 @@ const CAT_ORDER = {ena:["드라마","예능","웹예능"], event:["행사"]};
 // 타사(구매) 채널 노출 순서 — 이 목록 밖 채널은 MBN 아래로 이름순 누적
 const CH_ORDER = ["SBS","MBC","KBS2","JTBC","tvN","채널A","TV조선","MBN"];
 let DATA = load();
+// 편집 가능한 공유본 여부(공유용 저장 HTML로 열렸을 때) — 게시·깃허브·더보기를 감추고 엑셀 저장만 남긴다. 편집은 여는 사람 브라우저에만 저장됨.
+const SHARE_EDIT = (typeof window!=="undefined" && !!window.__SHAREEDIT__ && !VIEWONLY);
 let editingId = null;
 let EXPORT_HIDE = false; // 엑셀 등 화면 기반 내보내기 시 '공개 숨김(pubHide)' 프로그램을 잠시 그리드에서 뺀다
 
-function load(){ try{const s=localStorage.getItem(LS_KEY); if(s)return JSON.parse(s);}catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+function load(){ try{const s=localStorage.getItem(LS_KEY); if(s)return JSON.parse(s);}catch(e){}
+  // 편집 가능한 공유본(공유용 저장 HTML): 이 브라우저에 저장분이 없으면 파일에 심어둔 데이터를 시작점으로 사용
+  try{ if(typeof window!=="undefined" && window.__SHAREEDIT__){ const p=decodeShare(window.__SHAREEDIT__); if(p&&Array.isArray(p.data)){ window.__SHARE_S__=p.s||null; return p.data; } } }catch(e){}
+  return JSON.parse(JSON.stringify(SEED)); }
 function save(){ if(VIEWONLY)return; localStorage.setItem(LS_KEY, JSON.stringify(DATA)); localStorage.setItem(LS_TS, new Date().toISOString()); updateSavedLabel(); }
 // 오리지널 편성 '안'(1안·2안…): ENA 오리지널만 안별로 나눠 관리(타사·행사는 모든 안 공유)
 function loadScen(){ try{const s=JSON.parse(localStorage.getItem(LS_SCEN)); if(s&&Array.isArray(s.list)&&s.list.length)return s;}catch(e){} return null; }
@@ -739,6 +745,7 @@ function initControls(){
   document.getElementById("centerPdfBtn").onclick=exportCenterPDF;
   document.getElementById("exportBtn").onclick=exportJSON;
   document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
+  { const sh=document.getElementById("shareHtmlBtn"); if(sh) sh.onclick=exportShareHTML; }
   document.getElementById("importFile").onchange=importJSON;
   document.getElementById("resetBtn").onclick=()=>{ if(confirm("원본 데이터로 되돌릴까요? 수정 내용이 사라집니다.")){ pushUndo("원본으로 초기화됨"); DATA=JSON.parse(JSON.stringify(SEED)); localStorage.removeItem(LS_SCEN); ensureScen(); save(); initControls(); render(); } };
   // 상단 '더보기' 드롭다운(백업·공유·초기화 묶음) + 되돌리기 토스트 배선
@@ -1016,7 +1023,7 @@ function render(){
           const tag=metaLead?(p.draftTitle?'<span class="tag">가제</span>':(p._plan?'<span class="tag">예정</span>':'')):'';
           const tbd=(metaLead&&!p.time&&r.time)?'<span class="tag">미정</span>':'';
           const mv=(metaLead&&p._part===2)?'<span class="tag">이동</span>':'';
-          const lock=(!VIEWONLY&&metaLead&&p.pubHide)?'<span class="tag lock">🔒비공개</span>':''; // 편집 화면에서만, 게시 시 빠지는 프로그램 표시
+          const lock=(!VIEWONLY&&!SHARE_EDIT&&metaLead&&p.pubHide)?'<span class="tag lock">🔒비공개</span>':''; // 내 편집 화면에서만(공유본 제외), 게시 시 빠지는 프로그램 표시
           const head=`<b class="tt">${esc(p.title)}</b>`;
           const meta=`${tag}${tbd}${mv}${lock}${sub?` <small>${esc(sub)}</small>`:""}`;
           const inner=`${head}${meta}`;
@@ -1026,7 +1033,7 @@ function render(){
           const grow=(empt>0)?' ov':'';
           // 타사: 이 막대의 '마지막 주'가 현재 주차보다 앞이면(=이미 종영) '지난 편성'으로 옅은 빗금 표시.
           const _lastW=weeks[s.at+s.span-1]; const _past=(p.section==="other"&&_lastW&&_lastW.iso<todayISO)?' past':'';
-          body+=`<td class="wk ${cc}" colspan="${s.span}"><div class="bar ${typeClass(p)}${p._tent?' tent':''}${grow}${p._wkspan?' wkspan':''}${_past}${(!VIEWONLY&&p.pubHide)?' pubhidden':''}" data-id="${p.id}" title="${esc(barTitle(p))}">${inner}</div></td>`; }
+          body+=`<td class="wk ${cc}" colspan="${s.span}"><div class="bar ${typeClass(p)}${p._tent?' tent':''}${grow}${p._wkspan?' wkspan':''}${_past}${(!VIEWONLY&&!SHARE_EDIT&&p.pubHide)?' pubhidden':''}" data-id="${p.id}" title="${esc(barTitle(p))}">${inner}</div></td>`; }
         else if(s.gap){ body+=`<td class="wk ${cc}"><div class="bar ${typeClass(s.gap)} gap" title="${esc(s.gap.title)} 결방">결방</div></td>`; }
         else body+=`<td class="wk ${cc}"></td>`; });
       body+="</tr>";
@@ -1404,7 +1411,9 @@ function _tableMatrix(table){
 }
 // 현재 화면 그리드를 진짜 .xlsx로 저장 — 화면과 동일(선택 월·안·비교·필터 반영), 공유용
 function exportXLS(){
-  EXPORT_HIDE=true; render();   // '공개 숨김' 프로그램을 뺀 그리드로 갱신 후 그 화면을 읽어 엑셀 생성
+  // '공개 숨김'은 깃허브 공개용에서만 의미 있음. 공유용 저장(보기 전용) HTML에선 숨김을 적용하지 않고 보이는 그대로 내보낸다.
+  const _hid=!VIEWONLY;
+  if(_hid){ EXPORT_HIDE=true; render(); }   // 숨김 프로그램을 뺀 그리드로 갱신 후 그 화면을 읽어 엑셀 생성
   try{
   const table=document.getElementById("grid");
   const {grid,ncols,rowsEl}=_tableMatrix(table);
@@ -1495,7 +1504,7 @@ function exportXLS(){
   ];
   const blob=new Blob([_zipStore(files)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="ENA라인업_"+fmtISO(new Date())+".xlsx"; a.click(); URL.revokeObjectURL(a.href);
-  }finally{ EXPORT_HIDE=false; render(); }   // 원래 화면(숨김 포함)으로 복원
+  }finally{ if(_hid){ EXPORT_HIDE=false; render(); } }   // 원래 화면(숨김 포함)으로 복원
 }
 // ── 센터 공유용: 월별 오리지널 방영표(.xlsx) ────────────────────────
 //   화면 그리드가 아니라 DATA에서 직접 계산해, 센터가 쓰는 '주차(세로)×요일(가로)×시간대' 양식으로 만든다.
@@ -1817,19 +1826,38 @@ function exportXLS_legacyHtml(){
   const blob=new Blob(["﻿"+html],{type:"application/vnd.ms-excel"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download="ENA라인업_"+fmtISO(new Date())+".xls"; a.click(); URL.revokeObjectURL(a.href); }
-// 현재 편성표를 '보기 전용' 웹페이지(HTML) 한 장으로 저장.
-//   앱 전체(데이터 포함)를 그대로 담되 window.__VIEWDATA__ 를 심어 열리자마자 보기 전용으로 부팅된다.
-//   → 받는 사람도 연도·월 선택, 안 전환·비교, 장르·요일 필터를 쓸 수 있고(추가·수정·삭제만 차단),
-//      깃허브 Pages 등에 올리면 그대로 공유 링크가 된다.
+// 현재 편성표를 '편집 가능한 공유본' 웹페이지(HTML) 한 장으로 저장.
+//   앱 전체(데이터 포함)를 그대로 담되 window.__SHAREEDIT__ 를 심는다. 받는 사람이 파일을 열면(더블클릭=file://)
+//   → 프로그램 추가·수정, 1안·2안 만들어 비교까지 자유롭게 하고 엑셀로 저장 가능(게시·깃허브 기능은 감춤).
+//   → 받는 사람의 편집은 그 사람 브라우저에만 저장되어 원본(내 파일·공유 사이트)엔 영향이 없다.
 function exportShareHTML(){
   const mm=document.getElementById("moreMenu"); if(mm)mm.classList.remove("on"); // 열린 '더보기' 메뉴를 닫고 스냅샷(안 그러면 공유본에 빈 메뉴 상자가 남음)
   const payload=encodeShare();                                   // 현재 데이터+상태(월·안·비교 등)
-  const inject=`<script>window.__VIEWDATA__=${JSON.stringify(payload)};<\/script>\n`;
+  const inject=`<script>window.__SHAREEDIT__=${JSON.stringify(payload)};<\/script>\n`;
   let src="<!doctype html>\n"+document.documentElement.outerHTML; // 앱 전체(스타일·스크립트·로고 포함) 스냅샷
   src=src.replace(/<\/head>/i, inject+"</head>");                 // <head> 끝에 데이터 주입(메인 스크립트보다 먼저 실행됨)
   const blob=new Blob([src],{type:"text/html;charset=utf-8"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download="ENA라인업_공유_"+fmtISO(new Date())+".html"; a.click(); URL.revokeObjectURL(a.href); }
+// 편집 가능한 공유본으로 열렸을 때 화면 손질: 게시·게시토큰·게시본불러오기·'더보기'를 감추고, '엑셀 저장'만 상단(인쇄 옆)에 남긴다.
+//   추가·수정·삭제·안(1안·2안) 만들기·비교·필터 등 편집 기능은 그대로 둔다. 저장된 보기 상태(연·월·표시)도 복원.
+function applyShareEditUI(){
+  ["publishBtn","moreBtn","moreMenu"].forEach(id=>{ const el=document.getElementById(id); if(el)el.style.display="none"; });
+  { const ph=document.getElementById("fPubHide"); const lb=ph&&ph.closest("label"); if(lb)lb.style.display="none"; } // 공유본엔 '공개 숨김' 개념 없음
+  const _xls=document.getElementById("xlsBtn");
+  if(_xls){ _xls.style.display=""; const _pr=document.getElementById("printBtn");
+    if(_pr&&_pr.parentNode) _pr.parentNode.insertBefore(_xls,_pr); } // 더보기에서 꺼내 상단 버튼으로
+  const s=window.__SHARE_S__;   // 처음 열 때(공유본 데이터를 시작점으로 쓴 경우)만 세팅됨
+  if(s){
+    if(s.year) state.year=s.year;
+    if(s.months&&s.months.length) state.months=new Set(s.months);
+    if(s.sec) state.sections={...state.sections,...s.sec};
+    if(s.act && state.scenarios.includes(s.act)) state.activeScen=s.act;
+    const yv=document.getElementById("yearSel"); if(yv) yv.value=state.year;
+    [["tgEna","ena"],["tgOther","other"],["tgEvent","event"]].forEach(([i,k])=>{ const el=document.getElementById(i); if(el)el.checked=!!state.sections[k]; });
+    renderChips(); renderScenSel(); render();
+  }
+}
 
 // ── 공유 링크(데이터를 URL에 담기) ──────────────────────────────
 // 로고(base64 이미지)와 빈 값·계산용(_..) 필드를 뺀 가벼운 프로그램 객체
@@ -1887,9 +1915,13 @@ function enterViewMode(encoded){
   document.getElementById("tgOther").checked=!!state.sections.other;
   document.getElementById("tgEvent").checked=!!state.sections.event;
   renderChips(); renderScenSel(); renderCompareChips(); renderFilters();
-  // 편집·내보내기 버튼과 '오리지널 안(전환·비교)'·'필터' 그룹은 숨김(보기 전용에선 불필요). 인쇄는 남겨 둔다.
-  ["addBtn","saveWorkBtn","exportBtn","importBtn","xlsBtn","centerPngBtn","centerPdfBtn","resetBtn","moreBtn","moreMenu","scenGrp","filterGrp"]
+  // 편집 버튼과 '더보기' 메뉴·'오리지널 안(전환·비교)'·'필터' 그룹은 숨김(보기 전용에선 불필요). 인쇄와 엑셀 저장은 남긴다.
+  ["addBtn","saveWorkBtn","exportBtn","importBtn","shareHtmlBtn","centerPngBtn","centerPdfBtn","resetBtn","moreBtn","moreMenu","scenGrp","filterGrp"]
     .forEach(id=>{ const el=document.getElementById(id); if(el)el.style.display="none"; });
+  // 공유용 HTML에선 '엑셀 저장'만 남긴다: '더보기' 메뉴에서 꺼내 상단(인쇄 옆) 버튼으로 표시
+  { const _xls=document.getElementById("xlsBtn");
+    if(_xls){ _xls.style.display=""; const _pr=document.getElementById("printBtn");
+      if(_pr&&_pr.parentNode) _pr.parentNode.insertBefore(_xls,_pr); } }
   const si=document.getElementById("savedInfo"); if(si)si.style.display="none";
   document.querySelectorAll(".legend .hint").forEach(h=>h.style.display="none");
   // '보기 전용' 배지
@@ -1998,6 +2030,7 @@ async function ghPull(){
   if(enc && enterViewMode(enc)) return;          // 보기 전용 화면
   if(PUBLIC) document.body.classList.add("pub");
   initControls(); render();
+  if(SHARE_EDIT){ applyShareEditUI(); return; } // 편집 가능한 공유본: 게시·더보기 감추고 엑셀만. data.json 페치 안 함(데이터는 파일에 내장).
   if(PUBLIC){
     // 공개 화면은 이 브라우저의 localStorage를 무시하고 항상 게시본(data.json = 공개안)만 표시
     fetch("data.json",{cache:"no-store"}).then(r=>r.ok?r.json():null).then(p=>{
