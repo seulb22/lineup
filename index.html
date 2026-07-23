@@ -1920,14 +1920,11 @@ function ghGetToken(force){
   }
   return t;
 }
-const PUBSCEN="공개안";
 async function ghPublish(){
   if(VIEWONLY){ alert("보기 전용 화면에서는 게시할 수 없습니다."); return; }
-  // 공개용으로 지정한 '공개안'만 게시한다. 내부 검토용 안(1안·2안 등)은 커밋하지 않아 외부에 노출되지 않는다.
-  if(!state.scenarios.includes(PUBSCEN)){
-    alert("‘공개안’이라는 이름의 안이 없습니다.\n\n공개할 편성을 담은 안을 하나 만들고 이름을 '공개안'으로 바꾼 뒤 다시 게시해 주세요.\n(기존 안을 ‘복제’ → ‘이름’ 변경하면 편해요. 공개안에는 외부에 보여도 되는 것만 남기세요.)");
-    return;
-  }
+  // 기준 안(1안)에서 '🔒 공개에서 숨김'으로 표시하지 않은 것만 게시한다.
+  //   2안 등 다른 내부 검토용 안은 커밋하지 않아 외부에 노출되지 않는다.
+  const PUBSCEN=state.scenarios[0]; // 게시 기준 = 첫 번째 안(1안)
   const token=ghGetToken(false); if(!token) return;
   const btn=document.getElementById("publishBtn"); const orig=btn?btn.textContent:"";
   if(btn){ btn.disabled=true; btn.textContent="게시 중…"; }
@@ -1949,7 +1946,7 @@ async function ghPublish(){
       if(gr.ok){ sha=(await gr.json()).sha; }
       else if(gr.status===401){ throw {code:401}; }
       else if(gr.status!==404){ throw new Error("파일 조회 실패 ("+gr.status+")"); } }
-    // 3) '공개안' 오리지널 + 모든 타사·행사만 골라 커밋(그 외 내부 안은 제외)
+    // 3) 1안 오리지널(숨김 제외) + 모든 타사·행사(숨김 제외)만 골라 커밋(2안 등 내부 안은 제외)
     const pubData=DATA.filter(p=> !p.pubHide && (p.section==="ena" ? p.scen===PUBSCEN : true));
     const payload={ v:2, savedAt:new Date().toISOString(), data:pubData, scen:{list:[PUBSCEN], active:PUBSCEN} };
     const body={ message:"편성 업데이트 "+new Date().toLocaleString("ko-KR"), content:b64encodeUtf8(JSON.stringify(payload)), branch };
@@ -1958,7 +1955,7 @@ async function ghPublish(){
     if(pu.status===401) throw {code:401};
     if(!pu.ok) throw new Error("게시 실패 ("+pu.status+"): "+(await pu.text()).slice(0,200));
     save();
-    alert("게시 완료! 약 1분 뒤 공유 사이트에 반영됩니다.  (공개안 "+pubData.length+"개 항목)");
+    alert("게시 완료! 약 1분 뒤 공유 사이트에 반영됩니다.  ("+pubData.length+"개 항목, 🔒숨김 제외)");
   }catch(err){
     if(err&&err.code===401){ localStorage.removeItem(LS_TOKEN); alert("토큰이 올바르지 않거나 만료됐습니다.\n'게시'를 다시 눌러 토큰을 새로 입력해 주세요."); }
     else alert("게시 중 오류: "+(err&&err.message?err.message:err));
