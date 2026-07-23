@@ -442,6 +442,27 @@ function ensureScen(){
   state.scenarios=sc.list.slice();
   state.activeScen=(sc.active&&sc.list.includes(sc.active))?sc.active:sc.list[0];
   saveScen(); }
+// ── 안 사이 '내용' 동기화 ─────────────────────────────
+// 같은 프로그램에 공통 키(pkey)를 부여해, 마스터(첫 안=1안)에서 내용을 바꾸면 같은 pkey를 가진 다른 안에도 반영.
+//   pkey 규칙: 마스터 프로그램은 자기 id. 그 외 안은 '제목이 같은' 마스터 프로그램의 pkey를 물려받음(없으면 자기 id=독립).
+//   복제로 만든 안은 깊은복사라 pkey가 자동 승계됨(→ 앞으로 새로 만드는 안은 자동 연결).
+const SYNC_FIELDS=["title","raw","category","ptype","cast","episodes","logo"]; // 편성(요일·시간·날짜·결방)·미정/가안·회차기준(시작회차·기준일)은 제외 → 안별 유지
+function ensurePkey(){
+  const master=state.scenarios[0]; let changed=false;
+  DATA.forEach(p=>{ if(p.section==="ena"&&p.scen===master&&p.pkey==null){ p.pkey=p.id; changed=true; } });
+  const byTitle={};
+  DATA.forEach(p=>{ if(p.section==="ena"&&p.scen===master){ const k=(p.title||"").trim(); if(k&&!(k in byTitle)) byTitle[k]=p.pkey; } });
+  DATA.forEach(p=>{ if(p.section==="ena"&&p.scen!==master&&p.pkey==null){ const k=(p.title||"").trim(); p.pkey=(k&&byTitle[k]!=null)?byTitle[k]:p.id; changed=true; } });
+  if(changed && !VIEWONLY){ try{ localStorage.setItem(LS_KEY, JSON.stringify(DATA)); }catch(e){} } // pkey는 조용히 저장(저장시각·라벨 안 건드림)
+}
+function propagateContent(src){ // 마스터에서 편집된 src의 '내용' 속성을 같은 pkey의 다른 안 프로그램에 복사
+  if(!src||src.pkey==null) return;
+  DATA.forEach(p=>{
+    if(p!==src&&p.section==="ena"&&p.scen!==src.scen&&p.pkey===src.pkey){
+      SYNC_FIELDS.forEach(f=>{ if(f in src) p[f]=src[f]; });
+    }
+  });
+}
 function nextScenLabel(){ let i=1; while(state.scenarios.includes(i+"안"))i++; return i+"안"; } // 안 쓰는 가장 작은 'N안'
 function renderScenSel(){ const sel=document.getElementById("scenSel"); if(!sel)return;
   sel.innerHTML=state.scenarios.map((n,i)=>`<option value="${i}"${n===state.activeScen?" selected":""}>${esc(n)}</option>`).join("");
@@ -621,6 +642,7 @@ function expandMoves(p){
 
 const state={ year:2026, months:new Set(), sections:{ena:true,other:false,event:true}, holidays:true, scenarios:["1안"], activeScen:"1안", compare:false, compareScens:new Set(), fCat:new Set(), fDay:new Set() };
 ensureScen();
+ensurePkey();
 function years(){ const ys=new Set([2024,2025,2026,2027,2028,2029,2030]); DATA.forEach(p=>{ if(p.start)ys.add(+p.start.slice(0,4)); if(p.planYear)ys.add(+p.planYear); if(p.planEndYear)ys.add(+p.planEndYear); }); return [...ys].sort(); }
 
 function initControls(){
@@ -1248,6 +1270,10 @@ function saveModal(){ const g=id=>document.getElementById(id).value.trim();
   if(conf){ alert(`이미 같은 시간대에 편성된 프로그램이 있습니다.\n\n· 기존 프로그램: ${conf.title}\n· 겹치는 요일·시간: ${conf.day}요일 ${timeDisp(conf.time)}\n· 겹치는 주: ${conf.weeks.map(weekLabel).join(", ")}\n\n시간대나 주차를 조정한 뒤 다시 시도해 주세요.`); return; }
   if(editingId){ Object.assign(selfP,obj); }
   else { obj.id=(DATA.reduce((m,p)=>Math.max(m,p.id),0)+1); DATA.push(obj); }
+  // 오리지널 내용 동기화: 마스터(첫 안)에서 편집·추가한 프로그램의 내용을 같은 프로그램(pkey)인 다른 안에도 반영
+  if(obj.section==="ena"){ const tgt=editingId?selfP:obj;
+    if(tgt.pkey==null) tgt.pkey=tgt.id;
+    if(tgt.scen===state.scenarios[0]) propagateContent(tgt); }
   save(); closeModal(); render(); }
 function delModal(){ if(!editingId)return; const p=DATA.find(x=>x.id===editingId); const nm=(p&&p.title)?p.title:"프로그램";
   pushUndo("‘"+nm+"’ 삭제됨");   // 삭제는 확인창 대신 '되돌리기' 토스트로 안전장치 제공
@@ -1869,6 +1895,7 @@ function applyPublished(p){
   DATA = arr;
   if(p && p.scen) localStorage.removeItem(LS_SCEN); // 안 목록은 데이터의 scen 태그에서 다시 도출
   ensureScen();
+  ensurePkey();
   if(p && p.scen && p.scen.active && state.scenarios.includes(p.scen.active)) state.activeScen=p.scen.active;
   return true;
 }
