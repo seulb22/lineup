@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ENA 오리지널 라인업</title>
+<script>
+/* 첫 페인트 전에 '공개 화면'인지 미리 판별해 편집 UI 깜빡임(FOUC) 방지.
+   깃허브 등 http(s) 주소 + #view= 링크가 아니면 공개 화면 → <html>에 pub 부여.
+   (file:// = 내 PC 편집/공유본, #view= = 보기링크는 각자 로직이 처리) */
+try{
+  if(location.protocol!=="file:" && !/^#view=/.test(location.hash||""))
+    document.documentElement.classList.add("pub");
+}catch(e){}
+</script>
 <style>
 :root{
   --brand:#3830e0; --brand-d:#2a24b0;
@@ -257,8 +266,8 @@ body.pf .cast{font-size:9px;white-space:nowrap}
 .toast button:hover{background:rgba(255,255,255,.14)}
 @media print{.toast,.menu{display:none!important}}
 /* 공개(게시) 화면: 편집·안 관리·더보기·추가·저장·게시 버튼 숨김. 필터/표시/연월/인쇄는 유지 */
-body.pub #scenGrp,body.pub #addBtn,body.pub #saveWorkBtn,body.pub #publishBtn,body.pub #savedInfo,body.pub .menuwrap{display:none!important}
-body.pub tr.scenband{display:none}
+.pub #scenGrp,.pub #addBtn,.pub #saveWorkBtn,.pub #publishBtn,.pub #savedInfo,.pub .menuwrap{display:none!important}
+.pub tr.scenband{display:none}
 /* 공개에서 숨김 처리된 프로그램(편집 화면에서만 보임): 흐리게 + 자물쇠 배지 */
 .bar.pubhidden{opacity:.5}
 .tag.lock{background:#6b7280;color:#fff}
