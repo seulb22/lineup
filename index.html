@@ -266,7 +266,7 @@ body.pf .cast{font-size:9px;white-space:nowrap}
 .toast button:hover{background:rgba(255,255,255,.14)}
 @media print{.toast,.menu{display:none!important}}
 /* 공개(게시) 화면: 편집·안 관리·더보기·추가·저장·게시 버튼 숨김. 필터/표시/연월/인쇄는 유지 */
-.pub #scenGrp,.pub #addBtn,.pub #saveWorkBtn,.pub #publishBtn,.pub #savedInfo,.pub .menuwrap{display:none!important}
+.pub #scenGrp,.pub #addBtn,.pub #saveWorkBtn,.pub #publishBtn,.pub #savedInfo,.pub .menuwrap,.pub #tgOtherWrap{display:none!important}
 .pub tr.scenband{display:none}
 /* 공개에서 숨김 처리된 프로그램(편집 화면에서만 보임): 흐리게 + 자물쇠 배지 */
 .bar.pubhidden{opacity:.5}
@@ -282,7 +282,7 @@ body.pf .cast{font-size:9px;white-space:nowrap}
   <div class="grp noprint"><button id="fromNow">이번달부터</button><button id="allMonths">전체</button></div>
   <div class="grp noprint"><label class="tit">표시</label>
     <label class="toggle"><input type="checkbox" id="tgEna" checked> ENA</label>
-    <label class="toggle"><input type="checkbox" id="tgOther"> 타사</label>
+    <label class="toggle" id="tgOtherWrap"><input type="checkbox" id="tgOther"> 타사</label>
     <label class="toggle"><input type="checkbox" id="tgEvent" checked title="기념일·행사와 한국 공휴일을 함께 표시(공휴일은 연도별 자동, 설날·추석은 음력 반영). 1안에만 표시됩니다."> 행사·공휴일</label></div>
   <div class="grp noprint" id="filterGrp"><label class="tit" title="고른 장르·요일만 화면에 남깁니다. 데이터는 지우지 않으며(숨김만), 다시 누르거나 '전체'로 되돌아갑니다. 비교 보기에도 똑같이 적용됩니다.">필터</label>
     <span id="catFilter" class="grp"></span>
@@ -670,8 +670,8 @@ function initControls(){
   const ysel=document.getElementById("yearSel");
   const now=new Date();
   const wy=years().includes(now.getFullYear())?now.getFullYear():2026;
-  // 공개 화면은 작업 연도 기준 ±1년만 선택 가능
-  let yopts=years(); if(PUBLIC) yopts=yopts.filter(y=>Math.abs(y-wy)<=1);
+  // 공개 화면은 작업 연도 기준 ±1년만 선택 가능(단 2026년 이전은 숨김 — 2025 데이터 미정리)
+  let yopts=years(); if(PUBLIC){ yopts=yopts.filter(y=>Math.abs(y-wy)<=1 && y>=2026); state.sections.other=false; }
   ysel.innerHTML=yopts.map(y=>`<option value="${y}">${y}년</option>`).join("");
   state.year=wy;
   ysel.value=state.year; setMonthsFromNow();
@@ -1997,8 +1997,8 @@ async function ghPublish(){
       if(gr.ok){ sha=(await gr.json()).sha; }
       else if(gr.status===401){ throw {code:401}; }
       else if(gr.status!==404){ throw new Error("파일 조회 실패 ("+gr.status+")"); } }
-    // 3) 1안 오리지널(숨김 제외) + 모든 타사·행사(숨김 제외)만 골라 커밋(2안 등 내부 안은 제외)
-    const pubData=DATA.filter(p=> !p.pubHide && (p.section==="ena" ? p.scen===PUBSCEN : true));
+    // 3) 1안 오리지널(숨김 제외) + 행사·공휴일(숨김 제외)만 골라 커밋. 타사·2안 등 내부 안은 게시에서 완전 제외.
+    const pubData=DATA.filter(p=> !p.pubHide && (p.section==="ena" ? p.scen===PUBSCEN : p.section==="event"));
     const payload={ v:2, savedAt:new Date().toISOString(), data:pubData, scen:{list:[PUBSCEN], active:PUBSCEN} };
     const body={ message:"편성 업데이트 "+new Date().toLocaleString("ko-KR"), content:b64encodeUtf8(JSON.stringify(payload)), branch };
     if(sha) body.sha=sha;
