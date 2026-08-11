@@ -314,6 +314,9 @@ body.pf .cast{font-size:9px;white-space:nowrap}
         <button id="shareHtmlBtn" title="지금 편성표를 '보기 전용' 웹페이지(HTML) 한 장으로 저장 — 받는 사람은 라인업을 보고 엑셀로만 저장할 수 있어요(추가·수정·삭제 불가). 이 파일 하나만 넘기면 됩니다.">공유용 저장 (HTML)</button>
         <div class="menusep"></div>
         <button id="xlsBtn" title="현재 화면을 엑셀(.xlsx) 파일로 저장 — 보이는 그대로(선택 월·안·필터 반영), 공유용">엑셀 저장</button>
+        <label style="display:flex;align-items:center;gap:6px;padding:4px 12px;font-size:12px;color:#666;cursor:pointer;white-space:nowrap" title="켜면 화면에서 고른 달과 상관없이, 오늘 기준 6개월(연도 넘어가면 다음 해 포함)로 저장합니다. 화면 표시 자체는 바뀌지 않습니다.">
+          <input type="checkbox" id="xlsFix6" style="cursor:pointer">다음 해 포함 6개월 고정 저장
+        </label>
         <div class="menusep"></div>
         <button id="centerPngBtn" title="센터 공유용 '다음 달 오리지널 방영표'를 ENA 디자인(브랜드 색·KT Flow 서체) 이미지(PNG)로 저장 — 오늘 기준 다음 달 한 장. 누르면 바로 저장되며, 메일 본문에 붙여넣기 좋습니다.">센터용 월 이미지 (PNG)</button>
         <button id="centerPdfBtn" title="센터 공유용 '다음 달 오리지널 방영표'를 ENA 디자인(브랜드 색·KT Flow 서체) PDF로 저장 — 오늘 기준 다음 달 한 장. 누르면 바로 다운로드됩니다.">센터용 월 PDF</button>
@@ -372,7 +375,9 @@ body.pf .cast{font-size:9px;white-space:nowrap}
       <label title="켜면 '게시(공개)'할 때 이 프로그램은 빠집니다. 삭제가 아니라 감추기만 — 나중에 끄면 다시 공개됩니다."><input type="checkbox" id="fPubHide"> 🔒 공개(게시)에서 숨김</label>
     </div>
     <div class="field" id="wStart"><label>시작일 (방영 시작일)</label><input type="date" id="fStart" min="2000-01-01" max="2099-12-31"></div>
-    <div class="field" id="wEnd"><label>종료일 <small style="color:var(--sub)">(비우면 빈도·회차로 계산)</small></label><input type="date" id="fEnd" min="2000-01-01" max="2099-12-31"></div>
+    <div class="field" id="wEnd"><label>종료일 <small style="color:var(--sub)">(비우면 빈도·회차로 계산)</small></label><input type="date" id="fEnd" min="2000-01-01" max="2099-12-31">
+      <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:400;cursor:pointer" title="켜면 종료일·회차 수를 몰라도 연도가 바뀌어도 계속 표시됩니다(예: 나는 SOLO 같은 레귤러 프로)."><input type="checkbox" id="fOngoing"> 계속 방영(레귤러) <small style="color:var(--sub)">· 종영일 없음</small></label>
+    </div>
     <div class="field" id="wFreq"><label>방송 빈도 <small style="color:var(--sub)">(요일 체크하면 자동)</small></label><select id="fFreq">
       <option value="">미선택</option><option value="주1회">주 1회</option><option value="주2회">주 2회</option><option value="주3회">주 3회</option><option value="월1회">월 1회</option></select></div>
     <div class="field" id="wMonthWk" style="display:none"><label>매월 몇째 주 <small style="color:var(--sub)">(월 1회)</small></label><select id="fMonthWk">
@@ -514,6 +519,14 @@ function toMonday(iso){ if(!iso)return null; const d=new Date(iso+"T00:00:00"); 
 function fmtISO(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function md(iso){ const d=new Date(iso+"T00:00:00"); return (d.getMonth()+1)+"/"+d.getDate(); }
 function mondaysOfMonth(y,m){ const res=[]; let d=new Date(y,m-1,1); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); if(d.getMonth()!==m-1||d.getFullYear()!==y)d.setDate(d.getDate()+7); while(d.getFullYear()===y&&d.getMonth()===m-1){res.push(new Date(d)); d.setDate(d.getDate()+7);} return res; }
+// state.months는 'state.year 1월=1'부터 셈한 연속 슬롯(13=다음 해 1월…) — 연말에도 '이번달부터' 폭이
+//   줄지 않고 다음 해로 자연스럽게 이어지도록(고정 개월수 롤링) 하기 위함. 실제 (연,월)로 환산.
+function slotYM(m){ const mo=((m-1)%12)+1; const y=state.year+Math.floor((m-1)/12); return {y,mo}; }
+function monthRangeLabel(monthsSorted){
+  if(!monthsSorted||!monthsSorted.length) return `${state.year}년`;
+  const a=slotYM(monthsSorted[0]), b=slotYM(monthsSorted[monthsSorted.length-1]);
+  return a.y===b.y ? `${a.y}년 (${a.mo}~${b.mo}월)` : `${a.y}년 ${a.mo}월~${b.y}년 ${b.mo}월`;
+}
 
 // ── 한국 공휴일 자동 생성 ───────────────────────────────────────────
 // 양력 고정일은 공식(월·일)으로, 음력 기반(설날·부처님오신날·추석)은 해마다
@@ -643,6 +656,7 @@ function effEnd(p){ const s=toMonday(p.start); if(!s)return null;
   if(p.episodes){ const per=perWeek(p), sk=skipSet(p); let d=new Date(s), aired=0, guard=0;
     while(guard++<520){ const iso=fmtISO(d); if(!sk.has(iso))aired+=per; if(aired>=p.episodes)return iso; d.setDate(d.getDate()+7); }
     return fmtISO(d); }
+  if(p.ongoing){ const far=new Date(); far.setFullYear(far.getFullYear()+3); return fmtISO(toMonday(fmtISO(far))); }
   return fmtISO(s); }
 // 시작 월요일 sMon에서 per회/주(결방 sk 제외)로 count회를 채우는 마지막 주의 월요일 ISO
 function lastWeekFor(sMon, per, sk, count){ if(count<=0)return null; let d=new Date(sMon), aired=0, guard=0;
@@ -719,6 +733,7 @@ function initControls(){
     fr.value=(n===0)?"":(n>=3?"주3회":n===2?"주2회":"주1회");
     syncModal(); autoEps(); }));
   document.getElementById("fPlan").onchange=syncModal;
+  document.getElementById("fOngoing").onchange=syncModal;
   document.getElementById("fSection").onchange=syncModal;
   document.getElementById("fCategory").oninput=syncModal;
   document.getElementById("fCatSel").onchange=syncModal;
@@ -752,9 +767,12 @@ function initControls(){
   renderFilters();
   updateSavedLabel();
 }
-function setMonthsFromNow(){ const n=new Date(); if(state.year===n.getFullYear()){ state.months=new Set(); for(let m=n.getMonth()+1;m<=12;m++)state.months.add(m);} else state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); }
+function setMonthsFromNow(){ const n=new Date();
+  if(state.year===n.getFullYear()){ state.months=new Set(); for(let m=n.getMonth()+1;m<=12;m++) state.months.add(m); }
+  else state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); }
 function renderChips(){ const box=document.getElementById("monthChips"); box.querySelectorAll(".mchip").forEach(e=>e.remove());
-  for(let m=1;m<=12;m++){ const c=document.createElement("span"); c.className="mchip"+(state.months.has(m)?" on":""); c.textContent=m+"월";
+  for(let m=1;m<=12;m++){ const c=document.createElement("span"); c.className="mchip"+(state.months.has(m)?" on":"");
+    c.textContent=m+"월";
     c.onclick=()=>{ if(state.months.has(m))state.months.delete(m); else state.months.add(m); renderChips(); render(); }; box.appendChild(c);} }
 
 // ── 보기 필터(장르·요일) ─────────────────────────────────────
@@ -859,18 +877,18 @@ function barTitle(p){ const L=[];
 function render(){
   const monthsSorted=[...state.months].sort((a,b)=>a-b);
   const weeks=[];
-  monthsSorted.forEach(m=>{ const mds=mondaysOfMonth(state.year,m); mds.forEach((d,i)=>weeks.push({date:d,iso:fmtISO(d),month:m,first:i===0,malt:monthsSorted.indexOf(m)%2===1})); });
+  monthsSorted.forEach(m=>{ const {y,mo}=slotYM(m); const mds=mondaysOfMonth(y,mo); mds.forEach((d,i)=>weeks.push({date:d,iso:fmtISO(d),year:y,month:mo,slot:m,first:i===0,malt:monthsSorted.indexOf(m)%2===1})); });
   const secs=[]; if(state.sections.event)secs.push("event"); if(state.sections.ena)secs.push("ena"); if(state.sections.other)secs.push("other");
-  const monthsInView=new Set(weeks.map(w=>w.month));
   // 자동 공휴일 → 보이는 주(index)별 이름 배열. 연초(1/1 등)처럼 주 경계가 전년 12월로
-  // 넘어가 정확히 맞는 주가 없으면 그 달의 첫 주로 당겨서 표시한다.
+  // 넘어가 정확히 맞는 주가 없으면 그 달의 첫 주로 당겨서 표시한다. 화면이 두 해에 걸치면(롤링) 두 해분 다 계산.
   const holByWeek={};
-  if(state.holidays && weeks.length){ koreanHolidays(state.year).forEach(h=>{
-    const dObj=new Date(state.year,h.m-1,h.d), mIso=fmtISO(toMonday(fmtISO(dObj)));
-    let idx=weeks.findIndex(w=>w.iso===mIso);
-    if(idx<0 && monthsInView.has(h.m)) idx=weeks.findIndex(w=>w.month===h.m);
-    if(idx>=0){ (holByWeek[idx]=holByWeek[idx]||[]).push({name:h.name, md:h.m+"/"+h.d, sub:!!h.sub}); }
-  }); }
+  if(state.holidays && weeks.length){ const yearsInView=[...new Set(weeks.map(w=>w.year))];
+    yearsInView.forEach(yy=> koreanHolidays(yy).forEach(h=>{
+      const dObj=new Date(yy,h.m-1,h.d), mIso=fmtISO(toMonday(fmtISO(dObj)));
+      let idx=weeks.findIndex(w=>w.iso===mIso);
+      if(idx<0) idx=weeks.findIndex(w=>w.year===yy&&w.month===h.m);
+      if(idx>=0){ (holByWeek[idx]=holByWeek[idx]||[]).push({name:h.name, md:h.m+"/"+h.d, sub:!!h.sub}); }
+    })); }
   const wcls=w=>`${w.first?'mfirst ':''}${w.malt?'malt':''}`.trim();
   function ph(r){ return isDrama(r)?2:1; }
   // build layout of a row: array of {span, prog|null}
@@ -886,18 +904,23 @@ function render(){
   //   타사·행사는 모든 안 공통, ENA 오리지널은 그 안(scen) 것만 포함.
   function scenBody(scenName, secsArg){ secsArg=secsArg||secs;
     let inView=DATA.filter(p=>secsArg.includes(p.section)&&(p.section!=="ena"||p.scen===scenName)&&!(EXPORT_HIDE&&p.pubHide)).flatMap(expandMoves).map(p=>{
-      // 매년 반복 행사: 저장된 월·일을 '보고 있는 연도(state.year)'에 대입 → 해마다 자동 표시.
+      // 매년 반복 행사: 저장된 월·일을 '보이는 해'마다 대입 → 해마다 자동 표시.
       //   연초(1/1 등)처럼 주 경계가 전년 12월로 넘어가는 날은 그 해 첫 가시 주로 당겨서 보이게 클램프.
+      //   화면이 두 해에 걸치면(연말 롤링) 각 해의 가시 구간에 대해 따로 검사한다.
       if(p.section==="event" && p.yearly && p.start && weeks.length){
         const sd=new Date(p.start+"T00:00:00"), ed=p.end?new Date(p.end+"T00:00:00"):sd;
-        const startD=new Date(state.year,sd.getMonth(),sd.getDate());
-        let endD=new Date(state.year,ed.getMonth(),ed.getDate()); if(endD<startD)endD=startD;
-        const fm=weeks[0].month, lm=weeks[weeks.length-1].month;
-        const spanS=new Date(state.year,fm-1,1), spanE=new Date(state.year,lm,0);   // 가시 월 범위(월 단위)
-        if(endD<spanS||startD>spanE) return null;                                    // 보이는 달과 안 겹치면 제외
         const firstIso=weeks[0].iso, lastIso=weeks[weeks.length-1].iso;
         const clamp=iso=> iso<firstIso?firstIso:(iso>lastIso?lastIso:iso);
-        return {...p, _s:clamp(fmtISO(toMonday(fmtISO(startD)))), _e:clamp(fmtISO(toMonday(fmtISO(endD)))), _tent:!!p.tentative, _sk:new Set()};
+        for(const yy of [...new Set(weeks.map(w=>w.year))]){
+          const startD=new Date(yy,sd.getMonth(),sd.getDate());
+          let endD=new Date(yy,ed.getMonth(),ed.getDate()); if(endD<startD)endD=startD;
+          const wksYY=weeks.filter(w=>w.year===yy); if(!wksYY.length)continue;
+          const fm=wksYY[0].month, lm=wksYY[wksYY.length-1].month;
+          const spanS=new Date(yy,fm-1,1), spanE=new Date(yy,lm,0);   // 그 해의 가시 월 범위
+          if(endD<spanS||startD>spanE) continue;                       // 보이는 달과 안 겹치면 이 해는 제외
+          return {...p, _s:clamp(fmtISO(toMonday(fmtISO(startD)))), _e:clamp(fmtISO(toMonday(fmtISO(endD)))), _tent:!!p.tentative, _sk:new Set()};
+        }
+        return null;
       }
       if(p.start){ const s=toMonday(p.start); const o={...p,_s:fmtISO(s),_e:effEnd(p),_tent:!!p.tentative,_sk:skipSet(p)};
         if(p.freq==="월1회"&&p.section!=="event"){ o._mset=monthlySet(p);
@@ -906,7 +929,7 @@ function render(){
       if(p.tentative && p.planYear && p.planMonth){
         const s=(+p.planYear)*12+(+p.planMonth);
         const e=(+(p.planEndYear||p.planYear))*12+(+(p.planEndMonth||p.planMonth));
-        const mw=weeks.filter(w=>{ const k=state.year*12+w.month; return k>=Math.min(s,e)&&k<=Math.max(s,e); });
+        const mw=weeks.filter(w=>{ const k=w.year*12+w.month; return k>=Math.min(s,e)&&k<=Math.max(s,e); });
         if(mw.length) return {...p,_s:mw[0].iso,_e:mw[mw.length-1].iso,_tent:true,_plan:true,_sk:new Set()}; }
       return null;
     }).filter(p=>p);
@@ -1040,7 +1063,8 @@ function render(){
   // 월·주차 헤더 두 줄(월 머리글 + 날짜 줄)을 생성. catLabel=축 첫칸('장르'/'채널'), pre=""는 thead, "subhdr "는 본문 반복 헤더.
   function headerCells(col1, col2, pre){
     let h=`<tr class="${pre}months"><th class="axis cat" rowspan="2">${col1}</th><th class="axis day" rowspan="2">${col2}</th><th class="axis time" rowspan="2">시간대</th>`;
-    monthsSorted.forEach(m=>{ const n=weeks.filter(w=>w.month===m).length; if(n)h+=`<th class="mfirst${monthsSorted.indexOf(m)%2?' malt':''}" colspan="${n}">${MN[m]}</th>`; });
+    monthsSorted.forEach(m=>{ const {y,mo}=slotYM(m); const n=weeks.filter(w=>w.slot===m).length;
+      if(n)h+=`<th class="mfirst${monthsSorted.indexOf(m)%2?' malt':''}" colspan="${n}">${MN[mo]}${y!==state.year?` '${String(y).slice(2)}`:""}</th>`; });
     h+=`</tr><tr class="${pre}weeks">`;
     weeks.forEach(w=>{ h+=`<th class="${w.first?'mfirst ':''}${w.malt?'malt ':''}${w.iso===todayISO?'today-col':''}">${w.date.getDate()}</th>`; });
     return h+"</tr>";
@@ -1183,6 +1207,8 @@ function syncModal(){ const plan=document.getElementById("fPlan").checked;
   const isEvent=(sec==="event");
   document.getElementById("wStart").style.display=plan?"none":"";
   document.getElementById("wEnd").style.display=plan?"none":"";
+  { const ong=document.getElementById("fOngoing").checked, fe=document.getElementById("fEnd");
+    fe.disabled=ong; fe.style.opacity=ong?"0.45":""; if(ong)fe.value=""; }
   // 행사는 회차/빈도 불필요 — 시작일·종료일만
   document.getElementById("wFreq").style.display=(plan||isEvent)?"none":"";
   const freqVal=document.getElementById("fFreq").value;
@@ -1228,6 +1254,7 @@ function openModal(id,pre){ editingId=id; const p=id?DATA.find(x=>x.id===id):nul
   document.getElementById("fCast").value=p?(p.cast||""):"";
   document.getElementById("fStart").value=p?(p.start||""):"";
   document.getElementById("fEnd").value=p?(p.end||""):"";
+  document.getElementById("fOngoing").checked=!!(p&&p.ongoing);
   document.getElementById("fEps").value=p&&p.episodes?p.episodes:"";
   document.getElementById("fEpStart").value=p&&p.epStart?p.epStart:"";
   document.getElementById("fEpAnchor").value=p&&p.epAnchor?p.epAnchor:"";
@@ -1265,7 +1292,7 @@ function saveModal(){ const g=id=>document.getElementById(id).value.trim();
     ptype:g("fType"), title:g("fTitle"), cast:g("fCast"), raw:g("fRaw")||g("fTitle"),
     draftTitle:document.getElementById("fDraft").checked,
     pubHide:document.getElementById("fPubHide").checked };
-  if(plan){ obj.start=null; obj.end=null; obj.episodes=null; obj.skips=[]; obj.tentative=true; obj.move=null; obj.freq=null; obj.monthWeek=null; obj.yearly=false;
+  if(plan){ obj.start=null; obj.end=null; obj.episodes=null; obj.skips=[]; obj.tentative=true; obj.move=null; obj.freq=null; obj.monthWeek=null; obj.yearly=false; obj.ongoing=false;
     obj.planYear=+document.getElementById("fPlanY").value; obj.planMonth=+document.getElementById("fPlanM").value;
     let ey=+document.getElementById("fPlanEY").value, em=+document.getElementById("fPlanEM").value;
     if(ey*12+em < obj.planYear*12+obj.planMonth){ ey=obj.planYear; em=obj.planMonth; } // 종료가 시작보다 앞이면 시작으로 맞춤
@@ -1273,7 +1300,8 @@ function saveModal(){ const g=id=>document.getElementById(id).value.trim();
   else { const start=g("fStart"); const isEvent=(g("fSection")==="event");
     if(!isEvent&&!start){alert("시작일을 입력하거나 '편성 미정'을 체크하세요");return;}
     obj.start=start||null;   // 실제 입력일 보존(월요일 스냅 X). 그리드 위치는 렌더 시 toMonday로 계산.
-    const end=g("fEnd"); obj.end=end||null;
+    obj.ongoing=document.getElementById("fOngoing").checked;
+    const end=g("fEnd"); obj.end=obj.ongoing?null:(end||null);
     obj.skips=isEvent?[]:parseSkips(g("fSkips"), obj.start);
     obj.tentative=document.getElementById("fTent").checked; obj.planYear=null; obj.planMonth=null; obj.planEndYear=null; obj.planEndMonth=null;
     if(isEvent){ // 행사: 회차·빈도·편성변경 없음. 시작~종료일만. '매년 반복'이면 월·일만 쓰고 연도는 무시.
@@ -1400,6 +1428,12 @@ function _tableMatrix(table){
 function exportXLS(){
   // '공개 숨김'은 깃허브 공개용에서만 의미 있음. 공유용 저장(보기 전용) HTML에선 숨김을 적용하지 않고 보이는 그대로 내보낸다.
   const _hid=!VIEWONLY;
+  // "다음 해 포함 6개월 고정" 체크박스: 켜져 있으면 현재 선택된 달과 무관하게, 오늘 기준 6개월 롤링 창(연도 넘어가도 이어짐)으로
+  //   임시로 바꿔 내보내고, 끝나면 화면은 원래 선택 상태로 되돌린다(내보내기 전용, 화면 표시는 건드리지 않음).
+  const _fx=document.getElementById("xlsFix6"); const _forceRoll=_fx&&_fx.checked;
+  const _origYear=state.year, _origMonths=new Set(state.months);
+  if(_forceRoll){ const n=new Date(); state.year=n.getFullYear(); state.months=new Set();
+    const start=n.getMonth()+1; for(let i=0;i<6;i++) state.months.add(start+i); render(); }
   if(_hid){ EXPORT_HIDE=true; render(); }   // 숨김 프로그램을 뺀 그리드로 갱신 후 그 화면을 읽어 엑셀 생성
   try{
   const table=document.getElementById("grid");
@@ -1451,7 +1485,7 @@ function exportXLS(){
     const id=xfs.length; xfs.push(`<xf numFmtId="49" fontId="${fi}" fillId="${fl}" borderId="${bd}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1" applyNumberFormat="1"><alignment horizontal="${ha}" vertical="center"/></xf>`); xM.set(k,id); return id; };
   // 제목(간결하게)
   const monthsSorted=[...state.months].sort((a,b)=>a-b);
-  const title=`ENA 콘텐츠 편성센터 · 오리지널 라인업 ${state.year}년${monthsSorted.length?" ("+monthsSorted[0]+"~"+monthsSorted[monthsSorted.length-1]+"월)":""}`;
+  const title=`ENA 콘텐츠 편성센터 · 오리지널 라인업 ${monthRangeLabel(monthsSorted)}`;
   // sheetData (제목=1행, 화면 표는 2행부터)
   const mergeRefs=[]; if(ncols>1)mergeRefs.push(`A1:${_xlsxCol(ncols)}1`);
   const titleXf=xfId({text:title,bg:null,color:"#1b1f3b",bold:true,size:12,align:"left",noBorder:true});
@@ -1491,7 +1525,7 @@ function exportXLS(){
   ];
   const blob=new Blob([_zipStore(files)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="ENA라인업_"+fmtISO(new Date())+".xlsx"; a.click(); URL.revokeObjectURL(a.href);
-  }finally{ if(_hid){ EXPORT_HIDE=false; render(); } }   // 원래 화면(숨김 포함)으로 복원
+  }finally{ if(_hid){ EXPORT_HIDE=false; } if(_forceRoll){ state.year=_origYear; state.months=_origMonths; } if(_hid||_forceRoll){ render(); } }   // 원래 화면(선택 연도·달·숨김 포함)으로 복원
 }
 // ── 센터 공유용: 월별 오리지널 방영표(.xlsx) ────────────────────────
 //   화면 그리드가 아니라 DATA에서 직접 계산해, 센터가 쓰는 '주차(세로)×요일(가로)×시간대' 양식으로 만든다.
@@ -1596,7 +1630,7 @@ function exportCenterXLS(){
   if(!months.length){ alert("상단 '월' 칩에서 내보낼 달을 하나 이상 선택하세요."); return; }
   const scen=state.activeScen;
   const progs=DATA.filter(p=>p.section==="ena" && (p.scen||null)===(scen||null) && p.start && !(p.tentative&&!p.start) && !p.pubHide);
-  const sheets=months.map(m=>({ name:`${state.year}년 ${m}월 오리지널 방영 일정`, grid:buildCenterGrid(state.year,m,progs) }));
+  const sheets=months.map(m=>{ const {y,mo}=slotYM(m); return { name:`${y}년 ${mo}월 오리지널 방영 일정`, grid:buildCenterGrid(y,mo,progs) }; });
   const P='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   const sheetTags=sheets.map((s,i)=>`<sheet name="${_xmlEsc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("");
   const wbRels=sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")
@@ -1611,7 +1645,7 @@ function exportCenterXLS(){
   ];
   sheets.forEach((s,i)=>files.push({name:`xl/worksheets/sheet${i+1}.xml`,str:_ctrSheetXml(s.grid)}));
   const blob=new Blob([_zipStore(files)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`ENA_오리지널_방영표_${state.year}년_${months.join("_")}월.xlsx`; a.click(); URL.revokeObjectURL(a.href);
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`ENA_오리지널_방영표_${months.map(m=>{const {y,mo}=slotYM(m); return y+"-"+mo;}).join("_")}.xlsx`; a.click(); URL.revokeObjectURL(a.href);
 }
 
 // ── 센터용 월 방영표: 캔버스 렌더러 (PNG/PDF 공용) ─────────────────
@@ -1816,7 +1850,7 @@ function exportXLS_legacyHtml(){
   cg+="</colgroup>"; clone.insertAdjacentHTML("afterbegin",cg);
   const monthsSorted=[...state.months].sort((a,b)=>a-b);
   const scenLbl=state.compare?("비교 "+state.scenarios.filter(n=>state.compareScens.has(n)).join("·")):state.activeScen;
-  const title=`ENA 콘텐츠 편성센터 · 오리지널 라인업 [${scenLbl}] · ${state.year}년${monthsSorted.length?" ("+monthsSorted[0]+"~"+monthsSorted[monthsSorted.length-1]+"월)":""} · 저장 ${fmtISO(new Date())}`;
+  const title=`ENA 콘텐츠 편성센터 · 오리지널 라인업 [${scenLbl}] · ${monthRangeLabel(monthsSorted)} · 저장 ${fmtISO(new Date())}`;
   const style="<style>table{border-collapse:collapse}td,th{border:1px solid #c9cce0;padding:3px 5px;font-size:10.5px;font-family:'맑은 고딕',sans-serif;text-align:center;vertical-align:middle;mso-number-format:'\\@'}th{background-color:#eef0fa;font-weight:700}</style>";
   const head=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>라인업</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->${style}</head><body>`;
   const html=head+`<h3 style="font-family:'맑은 고딕',sans-serif">${title}</h3>`+clone.outerHTML+"</body></html>";
