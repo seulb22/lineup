@@ -768,7 +768,9 @@ function initControls(){
   updateSavedLabel();
 }
 function setMonthsFromNow(){ const n=new Date();
-  if(state.year===n.getFullYear()){ state.months=new Set(); for(let i=0;i<6;i++) state.months.add(n.getMonth()+1+i); state.roll=true; state.sel=new Set(state.months); }   // 이번달부터 6개월 고정(연말엔 다음 해로 이어짐: 13=다음 해 1월)
+  if(state.year===n.getFullYear()){ state.sel=new Set(); for(let m=n.getMonth()+1;m<=12;m++) state.sel.add(m);   // 올해 남은 달이 기본 선택
+    state.months=new Set(state.sel); while(state.months.size<6) state.months.add(Math.max(...state.months)+1);   // 6개 미만이면 모자란 만큼만 다음 해(13=1월…)를 끌어옴
+    state.roll=true; }
   else { state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); state.roll=false; } }
 function renderChips(){ const box=document.getElementById("monthChips"); box.querySelectorAll(".mchip").forEach(e=>e.remove());
   for(let m=1;m<=12;m++){ const c=document.createElement("span"); c.className="mchip"+(state.months.has(m)?" on":"");
