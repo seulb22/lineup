@@ -691,7 +691,7 @@ function initControls(){
   ysel.value=state.year; setMonthsFromNow();
   ysel.onchange=()=>{ state.year=+ysel.value; setMonthsFromNow(); renderChips(); render(); };
   document.getElementById("fromNow").onclick=()=>{ const n=new Date(); if(state.year!==n.getFullYear()){state.year=n.getFullYear(); ysel.value=state.year;} setMonthsFromNow(); renderChips(); render(); };
-  document.getElementById("allMonths").onclick=()=>{ state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); renderChips(); render(); };
+  document.getElementById("allMonths").onclick=()=>{ state.roll=false; state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); renderChips(); render(); };
   ["tgEna","tgOther"].forEach(id=>{ document.getElementById(id).onchange=e=>{ state.sections[id.slice(2).toLowerCase()]=e.target.checked; render(); }; });
   // '행사·공휴일'은 하나의 체크박스로 행사 표시와 공휴일 표시를 함께 켜고 끈다.
   document.getElementById("tgEvent").onchange=e=>{ state.sections.event=e.target.checked; state.holidays=e.target.checked; render(); };
@@ -768,14 +768,22 @@ function initControls(){
   updateSavedLabel();
 }
 function setMonthsFromNow(){ const n=new Date();
-  if(state.year===n.getFullYear()){ state.months=new Set(); for(let i=0;i<6;i++) state.months.add(n.getMonth()+1+i); }   // 이번달부터 6개월 고정(연말엔 다음 해로 이어짐: 13=다음 해 1월)
-  else state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); }
+  if(state.year===n.getFullYear()){ state.months=new Set(); for(let i=0;i<6;i++) state.months.add(n.getMonth()+1+i); state.roll=(n.getMonth()+1+5>12); state.rollOff=new Set(); }   // 이번달부터 6개월 고정(연말엔 다음 해로 이어짐: 13=다음 해 1월)
+  else { state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); state.roll=false; } }
 function renderChips(){ const box=document.getElementById("monthChips"); box.querySelectorAll(".mchip").forEach(e=>e.remove());
   for(let m=1;m<=12;m++){ const c=document.createElement("span"); c.className="mchip"+(state.months.has(m)?" on":"");
     c.textContent=m+"월";
-    c.onclick=()=>{ if(state.months.has(m))state.months.delete(m); else { state.months.add(m);
-        // 다음 해로 이어지는 6개월 창(13=다음 해 1월…)이면 폭을 6개월로 유지: 앞쪽 달을 켜면 맨 뒤 달부터 자동 해제
-        if([...state.months].some(x=>x>12)) while(state.months.size>6) state.months.delete(Math.max(...state.months)); }
+    c.onclick=()=>{ const n=new Date();
+      if(state.roll && state.year===n.getFullYear()){
+        // 다음 해로 이어지는 6개월 창: 기본창(이번달~+5)을 기준으로 매번 다시 계산 → 앞 달을 켜면 맨 뒤 달이 밀려나고, 끄면 밀려났던 달이 되돌아옴
+        const base=new Set(); for(let i=0;i<6;i++) base.add(n.getMonth()+1+i);
+        if(state.months.has(m)){ state.months.delete(m); if(base.has(m)) state.rollOff.add(m); }
+        else { state.months.add(m); state.rollOff.delete(m); }
+        const next=new Set([...base].filter(x=>!state.rollOff.has(x)));
+        [...state.months].filter(x=>!base.has(x)).forEach(x=>next.add(x));
+        while(next.size>6) next.delete(Math.max(...next));
+        state.months=next;
+      } else { if(state.months.has(m))state.months.delete(m); else state.months.add(m); }
       renderChips(); render(); }; box.appendChild(c);} }
 
 // ── 보기 필터(장르·요일) ─────────────────────────────────────
