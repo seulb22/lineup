@@ -768,17 +768,19 @@ function initControls(){
   updateSavedLabel();
 }
 function setMonthsFromNow(){ const n=new Date();
-  if(state.year===n.getFullYear()){ state.months=new Set(); for(let i=0;i<6;i++) state.months.add(n.getMonth()+1+i); state.roll=true; }   // 이번달부터 6개월 고정(연말엔 다음 해로 이어짐: 13=다음 해 1월)
+  if(state.year===n.getFullYear()){ state.months=new Set(); for(let i=0;i<6;i++) state.months.add(n.getMonth()+1+i); state.roll=true; state.sel=new Set(state.months); }   // 이번달부터 6개월 고정(연말엔 다음 해로 이어짐: 13=다음 해 1월)
   else { state.months=new Set([1,2,3,4,5,6,7,8,9,10,11,12]); state.roll=false; } }
 function renderChips(){ const box=document.getElementById("monthChips"); box.querySelectorAll(".mchip").forEach(e=>e.remove());
   for(let m=1;m<=12;m++){ const c=document.createElement("span"); c.className="mchip"+(state.months.has(m)?" on":"");
     c.textContent=m+"월";
     c.onclick=()=>{ const n=new Date();
       if(state.roll && state.year===n.getFullYear()){
-        // 6개월 고정: 달을 켜면 맨 뒤 달이 밀려나고, 끄면 맨 뒤에 다음 달이 붙어 항상 6개월 유지(13=다음 해 1월, 16=다음 해 4월…)
-        if(state.months.has(m)) state.months.delete(m); else state.months.add(m);
-        while(state.months.size>6){ const o=[...state.months].filter(x=>x!==m); state.months.delete(Math.max(...o)); }
-        while(state.months.size<6 && state.months.size>0) state.months.add(Math.max(...state.months)+1);
+        // 직접 고른 달(sel)은 개수 제한 없음. 6개 미만일 때만 맨 뒤에 다음 달을 자동으로 채워 보여줌(13=다음 해 1월…).
+        //   자동으로 채운 달은 sel에 넣지 않으므로, 달을 더 켜면 채움 달이 사라지고 끄면 다시 채워짐.
+        if(!state.sel || ![...state.sel].every(x=>state.months.has(x))) state.sel=new Set(state.months);
+        if(state.sel.has(m)) state.sel.delete(m); else state.sel.add(m);
+        const d=new Set(state.sel); while(d.size<6 && d.size>0) d.add(Math.max(...d)+1);
+        state.months=d;
       } else { if(state.months.has(m))state.months.delete(m); else state.months.add(m); }
       renderChips(); render(); }; box.appendChild(c);} }
 
