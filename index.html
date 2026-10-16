@@ -773,7 +773,10 @@ function setMonthsFromNow(){ const n=new Date();
 function renderChips(){ const box=document.getElementById("monthChips"); box.querySelectorAll(".mchip").forEach(e=>e.remove());
   for(let m=1;m<=12;m++){ const c=document.createElement("span"); c.className="mchip"+(state.months.has(m)?" on":"");
     c.textContent=m+"월";
-    c.onclick=()=>{ if(state.months.has(m))state.months.delete(m); else state.months.add(m); renderChips(); render(); }; box.appendChild(c);} }
+    c.onclick=()=>{ if(state.months.has(m))state.months.delete(m); else { state.months.add(m);
+        // 다음 해로 이어지는 6개월 창(13=다음 해 1월…)이면 폭을 6개월로 유지: 앞쪽 달을 켜면 맨 뒤 달부터 자동 해제
+        if([...state.months].some(x=>x>12)) while(state.months.size>6) state.months.delete(Math.max(...state.months)); }
+      renderChips(); render(); }; box.appendChild(c);} }
 
 // ── 보기 필터(장르·요일) ─────────────────────────────────────
 // 데이터를 지우지 않고 'ENA 오리지널만 화면에서 숨김'하는 필터. 다시 누르거나 '전체'로 원상복구.
